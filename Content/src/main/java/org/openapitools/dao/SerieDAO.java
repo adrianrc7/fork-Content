@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.sql.DataSource;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Repository;
 public class SerieDAO {
     
     private final DataSource dataSource;
+    private static final String ARRAY_ACTORS_COLUMN = "arrayActors"; // Constante para la columna de actores.
+
 
 
     public SerieDAO(DataSource dataSource) {
@@ -247,22 +250,25 @@ public class SerieDAO {
 
     public Serie getSerieById(Integer serieID) {
         Serie serie = null;
-        String  query = "SELECT * FROM series WHERE serieID = ?";
+        String query = "SELECT * FROM series WHERE serieID = ?";
 
-        try  (Connection connection = dataSource.getConnection();
-        PreparedStatement ps = connection.prepareStatement(query)) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(query)) {
+
             ps.clearParameters();
             ps.setInt(1, serieID);
 
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
-            	
-            	Integer[] actorArray = (Integer[]) rs.getArray("arrayActors").getArray();
+
+                // Uso de la constante para obtener el array de actores.
+                Integer[] actorArray = (Integer[]) rs.getArray(ARRAY_ACTORS_COLUMN).getArray();
                 List<Integer> arrayActors = new ArrayList<>();
                 for (Integer actorId : actorArray) {
                     arrayActors.add(actorId);
                 }
-            	
+
+                // Creación de la instancia de Serie.
                 serie = new Serie(
                     rs.getInt("serieID"),
                     rs.getString("title"),
@@ -273,8 +279,8 @@ public class SerieDAO {
                     rs.getString("photoURL"),
                     arrayActors
                 );
-            } 
-        } catch(SQLException e) {
+            }
+        } catch (SQLException e) {
             e.printStackTrace();
         }
         return serie;
@@ -352,39 +358,40 @@ public class SerieDAO {
     }
 
     public List<Serie> getSerieByActorID(Integer actorId) {
-        List<Serie> series = new ArrayList<>();
-        String query = "SELECT * FROM series WHERE ? = ANY(arrayActors)";
-    
-        try (Connection connection = dataSource.getConnection();
-        PreparedStatement ps = connection.prepareStatement(query)) {
-            ps.clearParameters();
-            ps.setInt(1, actorId);
-    
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                
-                Integer[] actorArray = (Integer[]) rs.getArray("arrayActors").getArray();
-                List<Integer> arrayActors = new ArrayList<>();
-                for (Integer aID : actorArray) {
-                    arrayActors.add(aID);
-                }
-                
-                Serie serie = new Serie(
-                        rs.getInt("serieID"),
-                        rs.getString("title"),
-                        rs.getInt("seasons"),
-                        rs.getInt("releaseYear"),
-                        rs.getInt("genreID"),
-                        rs.getString("description"),
-                        rs.getString("photoURL"),
-                        arrayActors
-                );
-                series.add(serie);
-            } 
-        } catch (SQLException e) {
-            e.printStackTrace();
+    List<Serie> series = new ArrayList<>();
+    // Seleccionar únicamente las columnas necesarias
+    String query = "SELECT serieID, title, seasons, releaseYear, genreID, description, photoURL, arrayActors " +
+                   "FROM series WHERE ? = ANY(arrayActors)";
+
+    try (Connection connection = dataSource.getConnection();
+         PreparedStatement ps = connection.prepareStatement(query)) {
+        
+        ps.clearParameters();
+        ps.setInt(1, actorId);
+
+        ResultSet rs = ps.executeQuery();
+        while (rs.next()) {
+            // Obtener el array de actores y convertirlo en una lista usando Arrays.asList
+            Integer[] actorArray = (Integer[]) rs.getArray("arrayActors").getArray();
+            List<Integer> arrayActors = new ArrayList<>(Arrays.asList(actorArray));
+
+            // Crear objeto Serie con las columnas seleccionadas
+            Serie serie = new Serie(
+                    rs.getInt("serieID"),
+                    rs.getString("title"),
+                    rs.getInt("seasons"),
+                    rs.getInt("releaseYear"),
+                    rs.getInt("genreID"),
+                    rs.getString("description"),
+                    rs.getString("photoURL"),
+                    arrayActors
+            );
+            series.add(serie);
         }
-        return series;
+    } catch (SQLException e) {
+        e.printStackTrace();
     }
+    return series;
+}
 
 }
